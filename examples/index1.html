@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>验证构建</title>
+  <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+</head>
+<body>
+  <div id="app"><aaa></aaa></div>
+  <script>
+    const vm = new Vue({
+      el: '#app',
+      // template: '<div>{{gsd}}</div>',
+      // render(h){
+      //   return h('h1', 'gsd')
+      // },
+      components: {
+        'aaa': {
+          template: '<h1>我是一个child组件</h1>'
+        }
+      },
+      data: {
+        gsd: 'aaa'
+      }
+    })
+    debugger
+    console.log(vm._c === vm.$createElement)
+  </script>
+</body>
+</html>
