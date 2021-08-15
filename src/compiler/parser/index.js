@@ -7,8 +7,14 @@ export function parse (template, options){
   let root
   let currentParent
   parseHTML(template, {
+    expectHTML: options.expectHTML,
+    isUnaryTag: options.isUnaryTag,
+    shouldDecodeNewlines: options.shouldDecodeNewlines,
+    shouldDecodeNewlinesForHref: options.shouldDecodeNewlinesForHref,
     shouldKeepComment: options.comments,
-    start (tag, attrs, unary) {},
+    start (tag, attrs, unary, start, end) {
+      
+    },
     end () {},
     chars (text) {},
     comment (text, start, end) {

@@ -1,6 +1,7 @@
 import Vue from './runtime/index'
 import { query } from './util/index'
 import {compileToFunctions} from './compiler/index'
+import { shouldDecodeNewlines, shouldDecodeNewlinesForHref } from './util/compat'
 
 const mount = Vue.prototype.$mount
 Vue.prototype.$mount = function (el, hydrating){
@@ -33,7 +34,8 @@ Vue.prototype.$mount = function (el, hydrating){
       //   console.log('render')
       // }
       const { render, staticRenderFns } = compileToFunctions(template, {
-
+        shouldDecodeNewlines,
+        shouldDecodeNewlinesForHref
       }, this)
       options.render = render
     }
