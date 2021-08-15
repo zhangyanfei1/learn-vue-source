@@ -16,6 +16,7 @@
       // render(h){
       //   return h('h1', 'gsd')
       // },
+      template: '<div id=app>{{gsd}}</div>',
       components: {
         'aaa': {
           template: '<h1>我是一个child组件</h1>'
@@ -25,8 +26,6 @@
         gsd: 'aaa'
       }
     })
-    debugger
-    console.log(vm._c === vm.$createElement)
   </script>
 </body>
 </html>

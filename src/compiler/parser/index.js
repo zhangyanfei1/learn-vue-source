@@ -1,5 +1,8 @@
 import {parseHTML} from './html-parser'
 
+/**
+ * Convert HTML string to AST.
+ */
 export function parse (template, options){
   let root
   let currentParent
@@ -8,7 +11,7 @@ export function parse (template, options){
     start (tag, attrs, unary) {},
     end () {},
     chars (text) {},
-    comment (text) {
+    comment (text, start, end) {
       if (currentParent) {
         const child = {
           type: 3,

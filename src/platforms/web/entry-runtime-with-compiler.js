@@ -32,11 +32,9 @@ Vue.prototype.$mount = function (el, hydrating){
       // let render = function () {
       //   console.log('render')
       // }
-      debugger
       const { render, staticRenderFns } = compileToFunctions(template, {
 
       }, this)
-      debugger
       options.render = render
     }
   }

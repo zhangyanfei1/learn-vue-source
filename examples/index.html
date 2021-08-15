@@ -12,7 +12,7 @@
   <script>
     new Vue({
       el: '#app',
-      template: '<div>{{gsd}}</div>',
+      template: '<div class="container" style="background-color: red;" @click="test">{{gsd}}</div>',
       components: {
         'aaa': {
           template: '<h1>我是一个child组件</h1>'

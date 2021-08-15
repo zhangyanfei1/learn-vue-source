@@ -2,6 +2,7 @@ import {makeMap} from '../../shared/util'
 
 
 const attribute = /^\s*([^\s"'<>\/=]+)(?:\s*(=)\s*(?:"([^"]*)"+|'([^']*)'+|([^\s"'=<>`]+)))?/
+const dynamicArgAttribute = /^\s*((?:v-[\w-]+:|@|:|#)\[[^=]+?\][^\s"'<>\/=]*)(?:\s*(=)\s*(?:"([^"]*)"+|'([^']*)'+|([^\s"'=<>`]+)))?/
 
 const ncname = '[a-zA-Z_][\\w\\-\\.]*'
 const qnameCapture = `((?:${ncname}\\:)?${ncname})`
@@ -21,7 +22,6 @@ export function parseHTML (html, options) {
   while (html) {
     last = html
     if (!lastTag || !isPlainTextElement(lastTag)) {
-      debugger
       let textEnd = html.indexOf('<')
       if (textEnd === 0) {
         if (comment.test(html)) {
@@ -51,7 +51,6 @@ export function parseHTML (html, options) {
         }
 
         const endTagMatch = html.match(endTag)
-
         if (endTagMatch) {
           const curIndex = index
           advance(endTagMatch[0].length)
@@ -98,8 +97,10 @@ export function parseHTML (html, options) {
       }
       advance(start[0].length)
       let end, attr
-      while (!(end = html.match(startTagClose)) && (attr = html.match(attribute))) {
+      while (!(end = html.match(startTagClose)) && (attr = html.match(dynamicArgAttribute) || html.match(attribute))) {
+        attr.start = index
         advance(attr[0].length)
+        attr.end = index
         match.attrs.push(attr)
       }
       if (end) {
@@ -109,6 +110,10 @@ export function parseHTML (html, options) {
         return match
       }
     }
+  }
+
+  function handleStartTag (match) {
+
   }
 
   function parseEndTag (tagName, start, end) {

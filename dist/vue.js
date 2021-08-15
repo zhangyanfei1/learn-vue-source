@@ -164,7 +164,6 @@ function initLifecycle (vm) {
 
 function lifecycleMixin (Vue) {
   Vue.prototype._update = function (vnode, hydrating) {
-    debugger
     const vm = this;
 
     const prevVnode = vm._vnode;
@@ -608,13 +607,15 @@ function createCompileToFunctionFn (compile) {
 }
 
 function createCompilerCreator (baseCompile) {
+  //接收一个baseOptions，返回  compile，compileToFunctions
+
   return function createCompiler (baseOptions) {
     function compile (template, options){
       const finalOptions = Object.create(baseOptions);
       const compiled = baseCompile(template.trim(), finalOptions);
       return compiled
     }
-
+    //返回  compile，compileToFunctions
     return {
       compile,
       compileToFunctions: createCompileToFunctionFn(compile)
@@ -623,6 +624,7 @@ function createCompilerCreator (baseCompile) {
 }
 
 const attribute = /^\s*([^\s"'<>\/=]+)(?:\s*(=)\s*(?:"([^"]*)"+|'([^']*)'+|([^\s"'=<>`]+)))?/;
+const dynamicArgAttribute = /^\s*((?:v-[\w-]+:|@|:|#)\[[^=]+?\][^\s"'<>\/=]*)(?:\s*(=)\s*(?:"([^"]*)"+|'([^']*)'+|([^\s"'=<>`]+)))?/;
 
 const ncname = '[a-zA-Z_][\\w\\-\\.]*';
 const qnameCapture = `((?:${ncname}\\:)?${ncname})`;
@@ -642,7 +644,6 @@ function parseHTML (html, options) {
   while (html) {
     last = html;
     if (!lastTag || !isPlainTextElement(lastTag)) {
-      debugger
       let textEnd = html.indexOf('<');
       if (textEnd === 0) {
         if (comment.test(html)) {
@@ -672,7 +673,6 @@ function parseHTML (html, options) {
         }
 
         const endTagMatch = html.match(endTag);
-
         if (endTagMatch) {
           const curIndex = index;
           advance(endTagMatch[0].length);
@@ -683,7 +683,6 @@ function parseHTML (html, options) {
         const startTagMatch = parseStartTag();
 
         if (startTagMatch) {
-          handleStartTag(startTagMatch);
           continue
         }
       }
@@ -708,8 +707,10 @@ function parseHTML (html, options) {
       };
       advance(start[0].length);
       let end, attr;
-      while (!(end = html.match(startTagClose)) && (attr = html.match(attribute))) {
+      while (!(end = html.match(startTagClose)) && (attr = html.match(dynamicArgAttribute) || html.match(attribute))) {
+        attr.start = index;
         advance(attr[0].length);
+        attr.end = index;
         match.attrs.push(attr);
       }
       if (end) {
@@ -731,6 +732,9 @@ function parseHTML (html, options) {
   }
 }
 
+/**
+ * Convert HTML string to AST.
+ */
 function parse (template, options){
   let root;
   let currentParent;
@@ -739,7 +743,7 @@ function parse (template, options){
     start (tag, attrs, unary) {},
     end () {},
     chars (text) {},
-    comment (text) {
+    comment (text, start, end) {
       if (currentParent) {
         const child = {
           type: 3,
@@ -760,6 +764,7 @@ function generate (ast, options){
   }
 }
 
+//createCompiler  函数  接收 createCompiler(baseOptions)  ，返回  两个函数
 const createCompiler = createCompilerCreator(function baseCompile (
   template, options
 ) {
@@ -804,11 +809,9 @@ Vue.prototype.$mount = function (el, hydrating){
       // let render = function () {
       //   console.log('render')
       // }
-      debugger
       const { render, staticRenderFns } = compileToFunctions(template, {
 
       }, this);
-      debugger
       options.render = render;
     }
   }
