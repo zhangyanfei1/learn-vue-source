@@ -1,4 +1,4 @@
-import {makeMap} from '../../shared/util'
+// import {makeMap} from '../../shared/util'
 
 
 const attribute = /^\s*([^\s"'<>\/=]+)(?:\s*(=)\s*(?:"([^"]*)"+|'([^']*)'+|([^\s"'=<>`]+)))?/
@@ -14,7 +14,7 @@ const doctype = /^<!DOCTYPE [^>]+>/i
 const endTag = new RegExp(`^<\\/${qnameCapture}[^>]*>`)
 
 
-export const isPlainTextElement = makeMap('script,style,textarea', true)
+const isPlainTextElement = () => false
 
 const decodingMap = {
   '&lt;': '<',
@@ -34,15 +34,17 @@ function decodeAttr (value, shouldDecodeNewlines) {
   return value.replace(re, match => decodingMap[match])
 }
 
-export function parseHTML (html, options) {
+function parseHTML (html, options) {
+  debugger
   const stack = []
   const expectHTML = options.expectHTML
-  const isUnaryTag = options.isUnaryTag || no
+  const isUnaryTag = options.isUnaryTag
   let index = 0
   let last, lastTag
   while (html) {
     last = html
     if (!lastTag || !isPlainTextElement(lastTag)) {
+      console.log('gsdaaa', lastTag)
       let textEnd = html.indexOf('<')
       if (textEnd === 0) {
         if (comment.test(html)) {
@@ -155,7 +157,7 @@ export function parseHTML (html, options) {
     if (expectHTML) {
 
     }
-    const unary = isUnaryTag(tagName) || !!unarySlash
+    const unary = false
     const l = match.attrs.length
     const attrs = new Array(l)
     for (let i = 0; i < l; i++) {
@@ -209,3 +211,7 @@ export function parseHTML (html, options) {
     html = html.substring(n)
   }
 }
+
+parseHTML('<li>aaa</li>', {})
+
+console.log('</li>'.indexOf('<', 1))
