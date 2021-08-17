@@ -212,6 +212,6 @@ function parseHTML (html, options) {
   }
 }
 
-parseHTML('<li>aaa</li>', {})
+parseHTML('<div><li>aaa</li></div>', {})
 
 console.log('</li>'.indexOf('<', 1))

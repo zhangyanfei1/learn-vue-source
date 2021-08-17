@@ -120,6 +120,10 @@ export function parseHTML (html, options) {
     }
 
     if (html === last) {
+      options.chars && options.chars(html)
+      if (!stack.length && options.warn) {
+        options.warn(`Mal-formatted tag at end of template: "${html}"`, { start: index + html.length })
+      }
       break
     }
   }
@@ -197,10 +201,20 @@ export function parseHTML (html, options) {
 
     if (pos >= 0) {
       for (let i = stack.length - 1; i >= pos; i--) {
+        if ((i > pos || !tagName) && options.warn) {
+          options.warn(
+            `tag <${stack[i].tag}> has no matching end tag.`,
+            { start: stack[i].start, end: stack[i].end }
+          )
+        }
         if (options.end) {
           options.end(stack[i].tag, start, end)
         }
       }
+
+       // Remove the open elements from the stack
+       stack.length = pos
+       lastTag = pos && stack[pos - 1].tag
     }
   }
 
