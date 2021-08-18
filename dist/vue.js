@@ -754,10 +754,14 @@ function parseHTML (html, options) {
         options.chars(text, index - text.length, index);
       }
     } else {
-
+      
     }
 
     if (html === last) {
+      options.chars && options.chars(html);
+      if (!stack.length && options.warn) {
+        options.warn(`Mal-formatted tag at end of template: "${html}"`, { start: index + html.length });
+      }
       break
     }
   }
@@ -826,6 +830,26 @@ function parseHTML (html, options) {
           break
         }
       }
+    } else {
+      pos = 0;
+    }
+
+    if (pos >= 0) {
+      for (let i = stack.length - 1; i >= pos; i--) {
+        if ((i > pos || !tagName) && options.warn) {
+          options.warn(
+            `tag <${stack[i].tag}> has no matching end tag.`,
+            { start: stack[i].start, end: stack[i].end }
+          );
+        }
+        if (options.end) {
+          options.end(stack[i].tag, start, end);
+        }
+      }
+
+       // Remove the open elements from the stack
+       stack.length = pos;
+       lastTag = pos && stack[pos - 1].tag;
     }
   }
 
@@ -835,23 +859,71 @@ function parseHTML (html, options) {
   }
 }
 
+function baseWarn (msg, range) {
+  console.error(`[Vue compiler]: ${msg}`);
+}
+
+let warn;
+
+function createASTElement (tag, attrs, parent){
+  return {
+    type: 1,
+    tag,
+    attrsList: attrs,
+    attrsMap: makeAttrsMap(attrs),
+    rawAttrsMap: {},
+    parent,
+    children: []
+  }
+}
 /**
  * Convert HTML string to AST.
  */
 function parse (template, options){
+  warn = options.warn || baseWarn;
+
+  const stack = [];
   let root;
   let currentParent;
   parseHTML(template, {
+    warn,
     expectHTML: options.expectHTML,
     isUnaryTag: options.isUnaryTag,
     shouldDecodeNewlines: options.shouldDecodeNewlines,
     shouldDecodeNewlinesForHref: options.shouldDecodeNewlinesForHref,
     shouldKeepComment: options.comments,
     start (tag, attrs, unary, start, end) {
-      
+      let element = createASTElement(tag, attrs, currentParent);
+      if (!root) {
+        root = element;
+      }
+      if (!unary) {
+        currentParent = element;
+        stack.push(element);
+      } else {
+        // closeElement(element)
+      }
     },
     end () {},
-    chars (text) {},
+    chars (text, start, end) {
+      const children = currentParent.children;
+      if (text) {
+        let child;
+        if (text !== ' ' || !children.length) {
+          child = {
+            type: 3,
+            text
+          };
+        }
+        if (child) {
+          if (options.outputSourceRange) {
+            child.start = start;
+            child.end = end;
+          }
+          children.push(child);
+        }
+      }
+    },
     comment (text, start, end) {
       if (currentParent) {
         const child = {
@@ -866,11 +938,51 @@ function parse (template, options){
   return root
 }
 
+function makeAttrsMap (attrs) {
+  return attrs
+}
+
+class CodegenState {
+  
+}
 function generate (ast, options){
+  const state = new CodegenState(options);
+  const code = ast ? genElement(ast, state) : '_c("div")';
   return {
     render: '',
     staticRenderFns: {}
   }
+}
+
+function genElement (el, state) {
+  if (el.parent) {
+    el.pre = el.pre || el.parent.pre;
+  }
+  {
+    let code;
+    if (el.component) {
+
+    } else {
+      let data;
+      const children = el.inlineTemplate ? null : genChildren(el, state, true);
+      code = `_c('${el.tag}'${
+        data ? `,${data}` : '' // data
+      }${
+        children ? `,${children}` : '' // children
+      })`;
+    }
+    return code
+  }
+}
+
+function genChildren (
+  el,
+  state,
+  checkSkip,
+  altGenElement,
+  altGenNode
+){
+
 }
 
 //createCompiler  函数  接收 createCompiler(baseOptions)  ，返回  两个函数
@@ -878,7 +990,14 @@ const createCompiler = createCompilerCreator(function baseCompile (
   template, options
 ) {
   const ast = parse(template.trim(), options);
+  console.log(ast);
+
+  if (options.optimize !== false) { //TODO
+    
+  }
+
   const code = generate(ast, options);
+  console.log(code);
   return {
     ast,
     render: code.render,
