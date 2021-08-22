@@ -101,6 +101,11 @@ var config = ({
 })
 
 const inBrowser = typeof window !== 'undefined';
+const UA = inBrowser && window.navigator.userAgent.toLowerCase();
+const isIOS = (UA && /iphone|ipad|ipod|ios/.test(UA)) || (weexPlatform === 'ios');
+function isNative (Ctor) {
+  return typeof Ctor === 'function' && /native code/.test(Ctor.toString())
+}
 
 const strats = config.optionMergeStrategies;
 
@@ -137,6 +142,56 @@ function mergeOptions (parent, child, vm){
   return options
 }
 
+const callbacks = [];
+let pending = false;
+function flushCallbacks () {
+  debugger
+  pending = false;
+  const copies = callbacks.slice(0);
+  callbacks.length = 0;
+  for (let i = 0; i < copies.length; i++) {
+    copies[i]();
+  }
+}
+let timerFunc;
+
+
+if (typeof Promise !== 'undefined' && isNative(Promise)) {
+  const p = Promise.resolve();
+  timerFunc = () => {
+    p.then(flushCallbacks);
+    // In problematic UIWebViews, Promise.then doesn't completely break, but
+    // it can get stuck in a weird state where callbacks are pushed into the
+    // microtask queue but the queue isn't being flushed, until the browser
+    // needs to do some other work, e.g. handle a timer. Therefore we can
+    // "force" the microtask queue to be flushed by adding an empty timer.
+    if (isIOS) setTimeout(noop$1);
+  };
+  
+} else if (typeof setImmediate !== 'undefined' && isNative(setImmediate)) {
+  timerFunc = () => {
+    setImmediate(flushCallbacks);
+  };
+} else {
+  // Fallback to setTimeout.
+  timerFunc = () => {
+    setTimeout(flushCallbacks, 0);
+  };
+}
+function nextTick (cb, ctx) {
+  callbacks.push(() => {
+    try {
+      cb.call(ctx);
+    } catch (e) {
+      // TODO
+    }
+  });
+  if (!pending) {
+    pending = true;
+    timerFunc();
+  }
+}
+
 function normalizeChildren (children) {
   return isPrimitive(children)
   ? [createTextVNode(children)] : Array.isArray(children)
@@ -169,9 +224,20 @@ class Dep {
     this.subs = [];
   }
 
+  addSub (sub) {
+    this.subs.push(sub);
+  }
+
   depend () {
     if (Dep.target) {
       Dep.target.addDep(this);
+    }
+  }
+
+  notify () {
+    const subs = this.subs.slice();
+    for (let i = 0, l = subs.length; i < l; i++) {
+      subs[i].update();
     }
   }
 }
@@ -184,10 +250,51 @@ function pushTarget (target) {
   Dep.target = target;
 }
 
+const queue = [];
+let has = {};
+let waiting = false;
+let flushing = false;
+let index = 0;
+function flushSchedulerQueue () {
+  let watcher, id;
+  debugger
+  flushing = true;
+  // currentFlushTimestamp = getNow()
+  for (index = 0; index < queue.length; index++) {
+    watcher = queue[index];
+    id = watcher.id;
+    has[id] = null;
+    watcher.run();
+  }
+}
+
+
+function queueWatcher (watcher) {
+  const id = watcher.id;
+  if (has[id] == null) {
+    has[id] = true;
+    if (!flushing) {
+      queue.push(watcher);
+    } else {
+
+    }
+    if (!waiting) {
+      waiting = true;
+      nextTick(flushSchedulerQueue);
+    }
+  }
+}
+
+let uid$1 = 0;
 class Watcher {
   constructor (vm, expOrFn, cb, options, isRenderWatcher) {
     this.vm = vm;
-    debugger
+    this.id = ++uid$1;
+    this.active = true;
+    this.deps = [];
+    this.newDeps = [];
+    this.depIds = new Set();
+    this.newDepIds = new Set();
     if (typeof expOrFn === 'function') {
       this.getter = expOrFn;
     } else {
@@ -207,8 +314,35 @@ class Watcher {
       value = this.getter(); //TODO
     } catch (e) {
 
+    } finally {
+      // popTarget()
     }
     return value
+  }
+
+  addDep (dep) {
+    const id = dep.id;
+    if (!this.newDepIds.has(id)) {
+      this.newDepIds.add(id);
+      this.newDeps.push(dep);
+      if (!this.depIds.has(id)) {
+        dep.addSub(this);
+      }
+    }
+  }
+
+  update () {
+    /* istanbul ignore else */
+    {
+      debugger
+      queueWatcher(this);
+    }
+  }
+
+  run () {
+    if (this.active) {
+      const value = this.get();
+    }
   }
 }
 
@@ -488,7 +622,8 @@ function defineReactive (obj, key, val,customSetter,shallow){
       {
         val = newVal;
       }
-      childOb = observe(newVal);
+      // childOb = observe(newVal)
+      dep.notify();
     }
   });
 }

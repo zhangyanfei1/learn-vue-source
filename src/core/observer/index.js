@@ -81,7 +81,8 @@ export function defineReactive (obj, key, val,customSetter,shallow){
       } else {
         val = newVal
       }
-      childOb = observe(newVal)
+      // childOb = observe(newVal)
+      dep.notify()
     }
   })
 }
