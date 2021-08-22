@@ -35,8 +35,10 @@ Vue.prototype.$mount = function (el, hydrating){
       // }
       const { render, staticRenderFns } = compileToFunctions(template, {
         shouldDecodeNewlines,
-        shouldDecodeNewlinesForHref
+        shouldDecodeNewlinesForHref,
+        delimiters: options.delimiters
       }, this)
+      debugger
       options.render = render
     }
   }

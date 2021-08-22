@@ -76,6 +76,21 @@ function makeMap (
     : val => map[val]
 }
 
+const _toString = Object.prototype.toString;
+
+function isPlainObject (obj) {
+  return _toString.call(obj) === '[object Object]'
+}
+
+
+function toString (val) {
+  return val == null
+    ? ''
+    : Array.isArray(val) || (isPlainObject(val) && val.toString === _toString)
+      ? JSON.stringify(val, null, 2)
+      : String(val)
+}
+
 var config = ({
   /**
    * Parse the real tag name for the specific platform.
@@ -146,9 +161,54 @@ function normalizeArrayChildren (children) {
   return res
 }
 
+let uid = 0;
+
+class Dep {
+  constructor () {
+    this.id = uid++;
+    this.subs = [];
+  }
+
+  depend () {
+    if (Dep.target) {
+      Dep.target.addDep(this);
+    }
+  }
+}
+
+Dep.target = null;
+const targetStack = [];
+
+function pushTarget (target) {
+  targetStack.push(target);
+  Dep.target = target;
+}
+
 class Watcher {
   constructor (vm, expOrFn, cb, options, isRenderWatcher) {
-    expOrFn();
+    this.vm = vm;
+    debugger
+    if (typeof expOrFn === 'function') {
+      this.getter = expOrFn;
+    } else {
+
+    }
+
+    this.value = this.lazy
+      ? undefined
+      : this.get();
+  }
+
+  get () {
+    pushTarget(this);
+    let value;
+    const vm = this.vm;
+    try {
+      value = this.getter(); //TODO
+    } catch (e) {
+
+    }
+    return value
   }
 }
 
@@ -327,6 +387,7 @@ function _createElement (context, tag, data, children, normalizationType){
 
 function installRenderHelpers (target) {
   target._v = createTextVNode;
+  target._s = toString;
 }
 
 function initRender (vm) {
@@ -353,6 +414,134 @@ initProxy = function initProxy (vm) {
   vm._renderProxy = vm;
 };
 
+function observe (value, asRootData) {
+  if (!isObject(value) || value instanceof VNode) {
+    return
+  }
+  let ob;
+  if (hasOwn(value, '__ob__') && value.__ob__ instanceof Observer) {
+    ob = value.__ob__;
+  } else if (
+    Array.isArray(value) || isPlainObject(value)
+  ) {
+    ob = new Observer(value);
+  }
+  return ob
+}
+
+class Observer {
+  constructor (value) {
+    this.value = value;
+    this.dep = new Dep();
+    this.vmCount = 0;
+    // def(value, '__ob__', this)
+    if (Array.isArray(value)) {
+      this.observeArray(value);
+    } else {
+      this.walk(value);
+    }
+  }
+
+  walk (obj) {
+    const keys = Object.keys(obj);
+    for (let i = 0; i < keys.length; i++) {
+      defineReactive(obj, keys[i]);
+    }
+  }
+
+  observeArray (items) {
+    for (let i = 0, l = items.length; i < l; i++) {
+      observe(items[i]);
+    }
+  }
+}
+
+function defineReactive (obj, key, val,customSetter,shallow){
+  const dep = new Dep();
+  const property = Object.getOwnPropertyDescriptor(obj, key);
+  if (property && property.configurable === false) {
+    return
+  }
+
+  const getter = property && property.get;
+  const setter = property && property.set;
+  if ((!getter || setter) && arguments.length === 2) {
+    val = obj[key];
+  }
+
+  let childOb = observe(val);
+  Object.defineProperty(obj, key, {
+    enumerable: true,
+    configurable: true,
+    get: function reactiveGetter () {
+      const value = val;
+      if (Dep.target) {
+        dep.depend();
+      }
+      return value
+    },
+    set: function reactiveSetter (newVal) {
+      const value = val;
+      if (newVal === value) {
+        return
+      }
+      {
+        val = newVal;
+      }
+      childOb = observe(newVal);
+    }
+  });
+}
+
+const sharedPropertyDefinition = {
+  enumerable: true,
+  configurable: true,
+  get: noop$1,
+  set: noop$1
+};
+
+function proxy (target, sourceKey, key) {
+  sharedPropertyDefinition.get = function proxyGetter () {
+    return this[sourceKey][key]
+  };
+  sharedPropertyDefinition.set = function proxySetter (val) {
+    this[sourceKey][key] = val;
+  };
+  Object.defineProperty(target, key, sharedPropertyDefinition);
+}
+function initState (vm) {
+  const opts = vm.$options;
+  if (opts.data) {
+    initData(vm);
+  }
+}
+
+function initData (vm) {
+  let data = vm.$options.data;
+  debugger
+  data = vm._data = typeof data === 'function'
+    ? getData(data, vm)
+    : data || {};
+    if (!isPlainObject(data)) {
+      data = {};
+      //TODO
+    }
+  const keys = Object.keys(data);
+  let i = keys.length;
+  while (i--) {
+    const key = keys[i];
+    {
+      proxy(vm, `_data`, key);
+    }
+  }
+
+  observe(data, true /* asRootData */);
+}
+
+function getData (data, vm) {
+  return data.call(vm, vm)
+}
+
 function initMixin (Vue) {
   Vue.prototype._init = function (options) {
     const vm = this;
@@ -370,6 +559,7 @@ function initMixin (Vue) {
     initProxy(vm);
     initLifecycle(vm);
     initRender(vm);
+    initState(vm);
 
     if (vm.$options.el) {
       vm.$mount(vm.$options.el);
@@ -927,8 +1117,47 @@ function parseHTML (html, options) {
   }
 }
 
+function parseFilters (exp) {
+  return exp
+}
+
+const defaultTagRE = /\{\{((?:.|\r?\n)+?)\}\}/g;
+const buildRegex = function () { //TODO
+
+};
+function parseText (text, delimiters){
+  const tagRE = delimiters ? buildRegex(delimiters) : defaultTagRE;
+  if (!tagRE.test(text)) {
+    return
+  }
+  const tokens = [];
+  const rawTokens = [];
+  let lastIndex = tagRE.lastIndex = 0;
+  let match, index, tokenValue;
+  while ((match = tagRE.exec(text))) {
+    index = match.index;
+    if (index > lastIndex) {
+      rawTokens.push(tokenValue = text.slice(lastIndex, index));
+      tokens.push(JSON.stringify(tokenValue));
+    }
+    const exp = parseFilters(match[1].trim());
+    tokens.push(`_s(${exp})`);
+    rawTokens.push({ '@binding': exp });
+    lastIndex = index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    rawTokens.push(tokenValue = text.slice(lastIndex));
+    tokens.push(JSON.stringify(tokenValue));
+  }
+  return {
+    expression: tokens.join('+'),
+    tokens: rawTokens
+  }
+}
+
 let warn;
 let transforms;
+let delimiters;
 
 function createASTElement (tag, attrs, parent){
   return {
@@ -956,6 +1185,7 @@ function parse (template, options){
   warn = options.warn || baseWarn;
 
   transforms = pluckModuleFunction(options.modules, 'transformNode');
+  delimiters = options.delimiters;
 
   const stack = [];
   let root;
@@ -998,8 +1228,16 @@ function parse (template, options){
     chars (text, start, end) {
       const children = currentParent.children;
       if (text) {
+        let res;
         let child;
-        if (text !== ' ' || !children.length) {
+        if (!inVPre && text !== ' ' && (res = parseText(text, delimiters))){ //TODO
+          child = {
+            type: 2,
+            expression: res.expression,
+            tokens: res.tokens,
+            text
+          };
+        } else if (text !== ' ' || !children.length) {
           child = {
             type: 3,
             text
@@ -1192,8 +1430,10 @@ Vue.prototype.$mount = function (el, hydrating){
       // }
       const { render, staticRenderFns } = compileToFunctions(template, {
         shouldDecodeNewlines,
-        shouldDecodeNewlinesForHref
+        shouldDecodeNewlinesForHref,
+        delimiters: options.delimiters
       }, this);
+      debugger
       options.render = render;
     }
   }

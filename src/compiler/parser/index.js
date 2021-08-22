@@ -1,8 +1,10 @@
 import {parseHTML} from './html-parser'
+import { parseText } from './text-parser'
 import { baseWarn,pluckModuleFunction } from '../helpers'
 
 export let warn
 let transforms
+let delimiters
 
 export function createASTElement (tag, attrs, parent){
   return {
@@ -30,6 +32,7 @@ export function parse (template, options){
   warn = options.warn || baseWarn
 
   transforms = pluckModuleFunction(options.modules, 'transformNode')
+  delimiters = options.delimiters
 
   const stack = []
   let root
@@ -72,9 +75,15 @@ export function parse (template, options){
     chars (text, start, end) {
       const children = currentParent.children
       if (text) {
+        let res
         let child
-        if (false){ //TODO
-
+        if (!inVPre && text !== ' ' && (res = parseText(text, delimiters))){ //TODO
+          child = {
+            type: 2,
+            expression: res.expression,
+            tokens: res.tokens,
+            text
+          }
         } else if (text !== ' ' || !children.length) {
           child = {
             type: 3,

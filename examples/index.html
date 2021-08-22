@@ -10,7 +10,7 @@
 <body>
   <div id="app"><aaa></div>
   <script>
-    new Vue({
+    const vm = new Vue({
       el: '#app',
       template: '<div class="container" style="background-color: red;" @click="test">{{gsd}}</div>',
       components: {
@@ -22,9 +22,11 @@
       //   return h('div', [h('h2', 'bcd1'), h('aaa'),h('aaa')])
       // },
       data: {
-        gsd: 'aaa'
+        gsd: 'bbb'
       }
     })
+
+    console.log(vm)
   </script>
 </body>
 </html>
