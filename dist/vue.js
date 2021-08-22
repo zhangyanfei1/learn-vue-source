@@ -1561,13 +1561,7 @@ Vue.prototype.$mount = function (el, hydrating){
     return this
   }
   const options = this.$options;
-  // if (options._componentTag) {
-  //   let render = function(h) {
-  //     return h('div', '这是一个子组件')
-  //   }
-  //   options.render = render
-  // }
-  if (!options.render) {
+  if (!options.render) { //只有在没有传入render的时候，才考虑使用模板
     let template = options.template;
     if (template) {
       if (typeof template === 'string') {
@@ -1584,9 +1578,6 @@ Vue.prototype.$mount = function (el, hydrating){
     }
 
     if (template) {
-      // let render = function () {
-      //   console.log('render')
-      // }
       const { render, staticRenderFns } = compileToFunctions(template, {
         shouldDecodeNewlines,
         shouldDecodeNewlinesForHref,
@@ -1599,6 +1590,16 @@ Vue.prototype.$mount = function (el, hydrating){
 
   return mount.call(this, el, hydrating)
 };
+
+function getOuterHTML (el) {
+  if (el.outerHTML) {
+    return el.outerHTML
+  } else {
+    const container = document.createElement('div');
+    container.appendChild(el.cloneNode(true));
+    return container.innerHTML
+  }
+}
 
 return Vue;
 

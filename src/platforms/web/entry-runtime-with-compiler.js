@@ -1,8 +1,13 @@
 import Vue from './runtime/index'
 import { query } from './util/index'
-import { warn } from '../../core/util/index'
+import { warn, cached } from '../../core/util/index'
 import {compileToFunctions} from './compiler/index'
 import { shouldDecodeNewlines, shouldDecodeNewlinesForHref } from './util/compat'
+
+const idToTemplate = cached(id => {
+  const el = query(id)
+  return el && el.innerHTML
+})
 
 const mount = Vue.prototype.$mount
 Vue.prototype.$mount = function (el, hydrating){
@@ -14,18 +19,18 @@ Vue.prototype.$mount = function (el, hydrating){
     return this
   }
   const options = this.$options
-  // if (options._componentTag) {
-  //   let render = function(h) {
-  //     return h('div', '这是一个子组件')
-  //   }
-  //   options.render = render
-  // }
-  if (!options.render) {
+  if (!options.render) { //只有在没有传入render的时候，才考虑使用模板
     let template = options.template
-    if (template) {
+    if (template) { //template几种不同传入方式处理
       if (typeof template === 'string') {
         if (template.charAt(0) === '#') {
-
+          template = idToTemplate(template)
+          if (!template) {
+            warn(
+              `Template element not found or is empty: ${options.template}`,
+              this
+            )
+          }
         }
       } else if (template.nodeType) {
         template = template.innerHTML
@@ -37,9 +42,6 @@ Vue.prototype.$mount = function (el, hydrating){
     }
 
     if (template) {
-      // let render = function () {
-      //   console.log('render')
-      // }
       const { render, staticRenderFns } = compileToFunctions(template, {
         shouldDecodeNewlines,
         shouldDecodeNewlinesForHref,
@@ -51,6 +53,16 @@ Vue.prototype.$mount = function (el, hydrating){
   }
 
   return mount.call(this, el, hydrating)
+}
+
+function getOuterHTML (el) {
+  if (el.outerHTML) {
+    return el.outerHTML
+  } else {
+    const container = document.createElement('div')
+    container.appendChild(el.cloneNode(true))
+    return container.innerHTML
+  }
 }
 
 export default Vue
