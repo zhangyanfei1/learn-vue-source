@@ -23,7 +23,7 @@ function createTextVNode (val) {
   return new VNode(undefined, undefined, undefined, String(val))
 }
 
-function noop (a, b, c) {}
+function noop$1 (a, b, c) {}
 
 const identity = (_) => _;
 
@@ -190,7 +190,7 @@ function mountComponent (vm, el, hydrating){
     vm._update(vm._render(), hydrating);
   };
 
-  new Watcher(vm, updateComponent, noop, null, true /* isRenderWatcher */);
+  new Watcher(vm, updateComponent, noop$1, null, true /* isRenderWatcher */);
 
   return vm
 }
@@ -325,11 +325,17 @@ function _createElement (context, tag, data, children, normalizationType){
   return vnode
 }
 
+function installRenderHelpers (target) {
+  target._v = createTextVNode;
+}
+
 function initRender (vm) {
+  vm._c = (a, b, c, d) => createElement(vm, a, b, c, d, false);
   vm.$createElement = (a, b, c, d) => createElement(vm, a, b, c, d, true);
 }
 
 function renderMixin (Vue) {
+  installRenderHelpers(Vue.prototype);
   Vue.prototype._render = function () {
     const vm = this;
     const {render, _parentVnode} = vm.$options;
@@ -587,8 +593,70 @@ const isUnaryTag = makeMap(
   'link,meta,param,source,track,wbr'
 );
 
+function baseWarn (msg, range) {
+  console.error(`[Vue compiler]: ${msg}`);
+}
+
+function pluckModuleFunction (modules, key){
+  return modules
+    ? modules.map(m => m[key]).filter(_ => _)
+    : []
+}
+
+function getAndRemoveAttr (el, name, removeFromMap){
+  let val;
+  if ((val = el.attrsMap[name]) != null) {
+    const list = el.attrsList;
+    for (let i = 0, l = list.length; i < l; i++) {
+      if (list[i].name === name) {
+        list.splice(i, 1);
+        break
+      }
+    }
+  }
+  if (removeFromMap) {
+    delete el.attrsMap[name];
+  }
+  return val
+}
+
+function transformNode (el, options) {
+  const staticClass = getAndRemoveAttr(el, 'class');
+  if (staticClass) {
+    el.staticClass = JSON.stringify(staticClass);
+  }
+}
+
+function genData (el) {
+  let data = '';
+  if (el.staticClass) {
+    data += `staticClass:${el.staticClass},`;
+  }
+  // if (el.classBinding) {
+  //   data += `class:${el.classBinding},`
+  // }
+  return data
+}
+
+
+var klass = {
+  // staticKeys: ['staticClass'],
+  transformNode,
+  genData
+}
+
+// import style from './style'
+// import model from './model'
+
+var modules$1 = [
+  klass
+  // style,
+  // model
+]
+
 const baseOptions = {
   expectHTML: true,
+  modules: modules$1,
   isUnaryTag
 };
 
@@ -596,7 +664,8 @@ function createFunction (code, errors) {
   try {
     return new Function(code)
   } catch (err) {
-
+    errors.push({ err, code });
+    return noop
   }
 }
 
@@ -606,9 +675,9 @@ function createCompileToFunctionFn (compile) {
     const res = {};
     const fnGenErrors = [];
     res.render = createFunction(compiled.render, fnGenErrors);
-    res.render = function (h) {
-      return h('div', [h('h1', 'aaa111')])
-    };
+    // res.render = function (h) {
+    //   return h('div', [h('h1', 'aaa111')])
+    // }
     res.staticRenderFns = {}; //TODO
     return res
   }
@@ -742,6 +811,7 @@ function parseHTML (html, options) {
         text = html.substring(0, textEnd);
       }
 
+      //纯文本，没有 标签
       if (textEnd < 0) {
         text = html;
       }
@@ -810,7 +880,6 @@ function parseHTML (html, options) {
     }
 
     if (!unary) {
-      debugger
       stack.push({ tag: tagName, lowerCasedTag: tagName.toLowerCase(), attrs: attrs, start: match.start, end: match.end });
       lastTag = tagName;
     }
@@ -821,7 +890,6 @@ function parseHTML (html, options) {
   }
 
   function parseEndTag (tagName, start, end) {
-    debugger
     let pos, lowerCasedTagName;
     if (tagName) {
       lowerCasedTagName = tagName.toLowerCase();
@@ -859,11 +927,8 @@ function parseHTML (html, options) {
   }
 }
 
-function baseWarn (msg, range) {
-  console.error(`[Vue compiler]: ${msg}`);
-}
-
 let warn;
+let transforms;
 
 function createASTElement (tag, attrs, parent){
   return {
@@ -876,15 +941,31 @@ function createASTElement (tag, attrs, parent){
     children: []
   }
 }
+
+
+function processElement (element, options){
+  for (let i = 0; i < transforms.length; i++) {
+    element = transforms[i](element, options) || element;
+  }
+}
 /**
  * Convert HTML string to AST.
  */
+
 function parse (template, options){
   warn = options.warn || baseWarn;
+
+  transforms = pluckModuleFunction(options.modules, 'transformNode');
 
   const stack = [];
   let root;
   let currentParent;
+  let inVPre = false;
+  function closeElement (element) {
+    if (!inVPre && !element.processed) {
+      element = processElement(element, options);
+    }
+  }
   parseHTML(template, {
     warn,
     expectHTML: options.expectHTML,
@@ -904,7 +985,16 @@ function parse (template, options){
         // closeElement(element)
       }
     },
-    end () {},
+    end (tag, start, end) {
+      const element = stack[stack.length - 1];
+      // pop stack
+      stack.length -= 1;
+      // currentParent = stack[stack.length - 1]
+      // if (process.env.NODE_ENV !== 'production' && options.outputSourceRange) {
+      //   element.end = end
+      // }
+      closeElement(element);
+    },
     chars (text, start, end) {
       const children = currentParent.children;
       if (text) {
@@ -939,17 +1029,31 @@ function parse (template, options){
 }
 
 function makeAttrsMap (attrs) {
-  return attrs
+  const map = {};
+  for (let i = 0, l = attrs.length; i < l; i++) {
+    // if (
+    //   process.env.NODE_ENV !== 'production' &&
+    //   map[attrs[i].name] && !isIE && !isEdge
+    // ) {
+    //   warn('duplicate attribute: ' + attrs[i].name, attrs[i])
+    // }
+    map[attrs[i].name] = attrs[i].value;
+  }
+  return map
 }
 
 class CodegenState {
-  
+  constructor (options) {
+    this.options = options;
+    this.dataGenFns = pluckModuleFunction(options.modules, 'genData');
+    this.staticRenderFns = [];
+  }
 }
 function generate (ast, options){
   const state = new CodegenState(options);
   const code = ast ? genElement(ast, state) : '_c("div")';
   return {
-    render: '',
+    render: `with(this){return ${code}}`,
     staticRenderFns: {}
   }
 }
@@ -961,9 +1065,12 @@ function genElement (el, state) {
   {
     let code;
     if (el.component) {
-
+      //TODO
     } else {
       let data;
+      { //TODO
+        data = genData$1(el, state);
+      }
       const children = el.inlineTemplate ? null : genChildren(el, state, true);
       code = `_c('${el.tag}'${
         data ? `,${data}` : '' // data
@@ -982,7 +1089,44 @@ function genChildren (
   altGenElement,
   altGenNode
 ){
+  const children = el.children;
+  if (children.length) {
+    const el = children[0];
+    const gen = altGenNode || genNode;
+    return `[${children.map(c => gen(c, state)).join(',')}]`
+  }
+}
 
+function genData$1 (el, state) {
+  let data = '{';
+  for (let i = 0; i < state.dataGenFns.length; i++) {
+    data += state.dataGenFns[i](el);
+  }
+  data = data.replace(/,$/, '') + '}';
+  return data
+}
+
+function genNode (node, state) {
+  if (node.type === 1) {
+    // return genElement(node, state)
+  } else if (node.type === 3 && node.isComment) {
+    // return genComment(node)
+  } else {
+    return genText(node)
+  }
+}
+
+function genText (text) {
+  return `_v(${text.type === 2
+    ? text.expression // no need for () because already wrapped in _s()
+    : transformSpecialNewlines(JSON.stringify(text.text))
+  })`
+}
+
+function transformSpecialNewlines (text) {
+  return text
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029')
 }
 
 //createCompiler  函数  接收 createCompiler(baseOptions)  ，返回  两个函数
@@ -990,14 +1134,11 @@ const createCompiler = createCompilerCreator(function baseCompile (
   template, options
 ) {
   const ast = parse(template.trim(), options);
-  console.log(ast);
-
   if (options.optimize !== false) { //TODO
     
   }
 
   const code = generate(ast, options);
-  console.log(code);
   return {
     ast,
     render: code.render,

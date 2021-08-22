@@ -1,7 +1,8 @@
 import {parseHTML} from './html-parser'
-import { baseWarn } from '../helpers'
+import { baseWarn,pluckModuleFunction } from '../helpers'
 
 export let warn
+let transforms
 
 export function createASTElement (tag, attrs, parent){
   return {
@@ -14,15 +15,31 @@ export function createASTElement (tag, attrs, parent){
     children: []
   }
 }
+
+
+export function processElement (element, options){
+  for (let i = 0; i < transforms.length; i++) {
+    element = transforms[i](element, options) || element
+  }
+}
 /**
  * Convert HTML string to AST.
  */
+
 export function parse (template, options){
   warn = options.warn || baseWarn
+
+  transforms = pluckModuleFunction(options.modules, 'transformNode')
 
   const stack = []
   let root
   let currentParent
+  let inVPre = false
+  function closeElement (element) {
+    if (!inVPre && !element.processed) {
+      element = processElement(element, options)
+    }
+  }
   parseHTML(template, {
     warn,
     expectHTML: options.expectHTML,
@@ -42,7 +59,16 @@ export function parse (template, options){
         // closeElement(element)
       }
     },
-    end () {},
+    end (tag, start, end) {
+      const element = stack[stack.length - 1]
+      // pop stack
+      stack.length -= 1
+      // currentParent = stack[stack.length - 1]
+      // if (process.env.NODE_ENV !== 'production' && options.outputSourceRange) {
+      //   element.end = end
+      // }
+      closeElement(element)
+    },
     chars (text, start, end) {
       const children = currentParent.children
       if (text) {
@@ -80,5 +106,14 @@ export function parse (template, options){
 
 function makeAttrsMap (attrs) {
   const map = {}
-  return attrs
+  for (let i = 0, l = attrs.length; i < l; i++) {
+    // if (
+    //   process.env.NODE_ENV !== 'production' &&
+    //   map[attrs[i].name] && !isIE && !isEdge
+    // ) {
+    //   warn('duplicate attribute: ' + attrs[i].name, attrs[i])
+    // }
+    map[attrs[i].name] = attrs[i].value
+  }
+  return map
 } 

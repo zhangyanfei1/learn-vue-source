@@ -104,6 +104,7 @@ export function parseHTML (html, options) {
         text = html.substring(0, textEnd)
       }
 
+      //纯文本，没有 标签
       if (textEnd < 0) {
         text = html
       }
@@ -175,7 +176,6 @@ export function parseHTML (html, options) {
     }
 
     if (!unary) {
-      debugger
       stack.push({ tag: tagName, lowerCasedTag: tagName.toLowerCase(), attrs: attrs, start: match.start, end: match.end })
       lastTag = tagName
     }
@@ -186,7 +186,6 @@ export function parseHTML (html, options) {
   }
 
   function parseEndTag (tagName, start, end) {
-    debugger
     let pos, lowerCasedTagName
     if (tagName) {
       lowerCasedTagName = tagName.toLowerCase()

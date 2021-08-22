@@ -35,7 +35,6 @@ function decodeAttr (value, shouldDecodeNewlines) {
 }
 
 function parseHTML (html, options) {
-  debugger
   const stack = []
   const expectHTML = options.expectHTML
   const isUnaryTag = options.isUnaryTag

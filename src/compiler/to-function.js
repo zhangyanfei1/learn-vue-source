@@ -2,7 +2,8 @@ function createFunction (code, errors) {
   try {
     return new Function(code)
   } catch (err) {
-
+    errors.push({ err, code })
+    return noop
   }
 }
 
@@ -12,9 +13,9 @@ export function createCompileToFunctionFn (compile) {
     const res = {}
     const fnGenErrors = []
     res.render = createFunction(compiled.render, fnGenErrors)
-    res.render = function (h) {
-      return h('div', [h('h1', 'aaa111')])
-    }
+    // res.render = function (h) {
+    //   return h('div', [h('h1', 'aaa111')])
+    // }
     res.staticRenderFns = {} //TODO
     return res
   }

@@ -7,14 +7,11 @@ export const createCompiler = createCompilerCreator(function baseCompile (
   template, options
 ) {
   const ast = parse(template.trim(), options)
-  console.log(ast)
-
   if (options.optimize !== false) { //TODO
     optimize(ast, options)
   }
 
   const code = generate(ast, options)
-  console.log(code)
   return {
     ast,
     render: code.render,
