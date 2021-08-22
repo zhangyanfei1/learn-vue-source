@@ -8,5 +8,7 @@ export default ({
    */
    parsePlatformTagName: identity,
    isReservedTag: no,
-   optionMergeStrategies: Object.create(null)
+   optionMergeStrategies: Object.create(null),
+   warnHandler: null,
+   silent: false
 })

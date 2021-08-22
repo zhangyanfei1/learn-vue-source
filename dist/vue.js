@@ -97,7 +97,9 @@ var config = ({
    */
    parsePlatformTagName: identity,
    isReservedTag: no$1,
-   optionMergeStrategies: Object.create(null)
+   optionMergeStrategies: Object.create(null),
+   warnHandler: null,
+   silent: false
 })
 
 const inBrowser = typeof window !== 'undefined';
@@ -191,6 +193,22 @@ function nextTick (cb, ctx) {
     timerFunc();
   }
 }
+
+let warn = noop$1;
+let generateComponentTrace = (noop$1); // work around flow check
+
+
+const hasConsole = typeof console !== 'undefined';
+warn = (msg, vm) => {
+  const trace = vm ? generateComponentTrace(vm) : '';
+  if (config.warnHandler) {
+
+  } else if (hasConsole && (!config.silent)) {
+    console.error(`[Vue warn]: ${msg}${trace}`);
+  }
+};
+
+generateComponentTrace = vm => {};
 
 function normalizeChildren (children) {
   return isPrimitive(children)
@@ -1290,7 +1308,7 @@ function parseText (text, delimiters){
   }
 }
 
-let warn;
+let warn$1;
 let transforms;
 let delimiters;
 
@@ -1317,7 +1335,7 @@ function processElement (element, options){
  */
 
 function parse (template, options){
-  warn = options.warn || baseWarn;
+  warn$1 = options.warn || baseWarn;
 
   transforms = pluckModuleFunction(options.modules, 'transformNode');
   delimiters = options.delimiters;
@@ -1332,7 +1350,7 @@ function parse (template, options){
     }
   }
   parseHTML(template, {
-    warn,
+    warn: warn$1,
     expectHTML: options.expectHTML,
     isUnaryTag: options.isUnaryTag,
     shouldDecodeNewlines: options.shouldDecodeNewlines,
@@ -1536,6 +1554,12 @@ const shouldDecodeNewlinesForHref = inBrowser ? getShouldDecode(true) : false;
 const mount = Vue.prototype.$mount;
 Vue.prototype.$mount = function (el, hydrating){
   el = el && query(el);
+  if (el === document.body || el === document.documentElement) {
+    warn(
+      `Do not mount Vue to <html> or <body> - mount to normal elements instead.`
+    );
+    return this
+  }
   const options = this.$options;
   // if (options._componentTag) {
   //   let render = function(h) {

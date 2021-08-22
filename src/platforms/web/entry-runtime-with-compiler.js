@@ -1,11 +1,18 @@
 import Vue from './runtime/index'
 import { query } from './util/index'
+import { warn } from '../../core/util/index'
 import {compileToFunctions} from './compiler/index'
 import { shouldDecodeNewlines, shouldDecodeNewlinesForHref } from './util/compat'
 
 const mount = Vue.prototype.$mount
 Vue.prototype.$mount = function (el, hydrating){
   el = el && query(el)
+  if (el === document.body || el === document.documentElement) {
+    warn(
+      `Do not mount Vue to <html> or <body> - mount to normal elements instead.`
+    )
+    return this
+  }
   const options = this.$options
   // if (options._componentTag) {
   //   let render = function(h) {
