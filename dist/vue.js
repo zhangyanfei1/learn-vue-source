@@ -91,6 +91,22 @@ function toString (val) {
       : String(val)
 }
 
+
+function cached(fn){
+  const cache = Object.create(null);
+  return (function cachedFn (str) {
+    const hit = cache[str];
+    return hit || (cache[str] = fn(str))
+  })
+}
+
+function extend (to, _from) {
+  for (const key in _from) {
+    to[key] = _from[key];
+  }
+  return to
+}
+
 var config = ({
   /**
    * Parse the real tag name for the specific platform.
@@ -196,10 +212,10 @@ function nextTick (cb, ctx) {
 
 let warn = noop$1;
 let generateComponentTrace = (noop$1); // work around flow check
-
+let formatComponentName = (noop$1);
 
 const hasConsole = typeof console !== 'undefined';
-warn = (msg, vm) => {
+warn = (msg, vm) => { //对代码异常情况的处理
   const trace = vm ? generateComponentTrace(vm) : '';
   if (config.warnHandler) {
 
@@ -208,7 +224,19 @@ warn = (msg, vm) => {
   }
 };
 
-generateComponentTrace = vm => {};
+formatComponentName = (vm, includeFile) => {
+  if (vm.$root === vm) {
+    return '<Root>'
+  }
+};
+
+generateComponentTrace = vm => {
+  if (vm._isVue && vm.$parent) {
+
+  } else {
+    return `\n\n(found in ${formatComponentName(vm)})`
+  }
+};
 
 function normalizeChildren (children) {
   return isPrimitive(children)
@@ -923,6 +951,7 @@ function query (el){
   if (typeof el === 'string') {
     const selected = document.querySelector(el);
     if (!selected) {
+      warn('Canot find element：' + el);
       return document.createElement('div')
     }
     return selected
@@ -997,9 +1026,28 @@ var modules$1 = [
   // model
 ]
 
+function model (){
+  
+}
+
+function text (el, dir) {
+  
+}
+
+function html (el, dir) {
+
+}
+
+var directives = {
+  model,
+  text,
+  html
+}
+
 const baseOptions = {
   expectHTML: true,
   modules: modules$1,
+  directives,
   isUnaryTag
 };
 
@@ -1026,13 +1074,53 @@ function createCompileToFunctionFn (compile) {
   }
 }
 
+// detect problematic expressions in a template
+function detectErrors (ast, warn) {
+  
+}
+
 function createCompilerCreator (baseCompile) {
   //接收一个baseOptions，返回  compile，compileToFunctions
 
   return function createCompiler (baseOptions) {
     function compile (template, options){
+      // 合并baseOption 和 options
       const finalOptions = Object.create(baseOptions);
+      const errors = [];
+      const tips = [];
+
+      let warn = (msg, range, tip) => {
+        (tip ? tips : errors).push(msg);
+      };
       if (options) {
+        if (options.outputSourceRange) {
+          const leadingSpaceLength = template.match(/^\s*/)[0].length;
+
+          warn = (msg, range, tip) => {
+            const data = { msg };
+            if (range) {
+              if (range.start != null) {
+                data.start = range.start + leadingSpaceLength;
+              }
+              if (range.end != null) {
+                data.end = range.end + leadingSpaceLength;
+              }
+            }
+            (tip ? tips : errors).push(data);
+          };
+        }
+        //合并 modules
+        if (options.modules) {
+          finalOptions.modules =
+            (baseOptions.modules || []).concat(options.modules);
+        }
+        //合并 directives
+        if (options.directives) {
+          finalOptions.directives = extend(
+            Object.create(baseOptions.directives || null),
+            options.directives
+          );
+        }
         // copy other options
         for (const key in options) {
           if (key !== 'modules' && key !== 'directives') {
@@ -1040,7 +1128,11 @@ function createCompilerCreator (baseCompile) {
           }
         }
       }
+      finalOptions.warn = warn;
       const compiled = baseCompile(template.trim(), finalOptions);
+      detectErrors(compiled.ast, warn);
+      compiled.errors = errors;
+      compiled.tips = tips;
       return compiled
     }
     //返回  compile，compileToFunctions
@@ -1551,6 +1643,11 @@ const shouldDecodeNewlines = inBrowser ? getShouldDecode(false) : false;
 // #6828: chrome encodes content in a[href]
 const shouldDecodeNewlinesForHref = inBrowser ? getShouldDecode(true) : false;
 
+const idToTemplate = cached(id => {
+  const el = query(id);
+  return el && el.innerHTML
+});
+
 const mount = Vue.prototype.$mount;
 Vue.prototype.$mount = function (el, hydrating){
   el = el && query(el);
@@ -1563,10 +1660,16 @@ Vue.prototype.$mount = function (el, hydrating){
   const options = this.$options;
   if (!options.render) { //只有在没有传入render的时候，才考虑使用模板
     let template = options.template;
-    if (template) {
+    if (template) { //template几种不同传入方式处理
       if (typeof template === 'string') {
         if (template.charAt(0) === '#') {
-
+          template = idToTemplate(template);
+          if (!template) {
+            warn(
+              `Template element not found or is empty: ${options.template}`,
+              this
+            );
+          }
         }
       } else if (template.nodeType) {
         template = template.innerHTML;
@@ -1579,6 +1682,7 @@ Vue.prototype.$mount = function (el, hydrating){
 
     if (template) {
       const { render, staticRenderFns } = compileToFunctions(template, {
+        outputSourceRange: true,
         shouldDecodeNewlines,
         shouldDecodeNewlinesForHref,
         delimiters: options.delimiters
@@ -1600,6 +1704,8 @@ function getOuterHTML (el) {
     return container.innerHTML
   }
 }
+
+Vue.compile = compileToFunctions; //把你的模板编译成 render函数
 
 return Vue;
 

@@ -43,6 +43,7 @@ Vue.prototype.$mount = function (el, hydrating){
 
     if (template) {
       const { render, staticRenderFns } = compileToFunctions(template, {
+        outputSourceRange: true,
         shouldDecodeNewlines,
         shouldDecodeNewlinesForHref,
         delimiters: options.delimiters
@@ -64,5 +65,7 @@ function getOuterHTML (el) {
     return container.innerHTML
   }
 }
+
+Vue.compile = compileToFunctions //把你的模板编译成 render函数
 
 export default Vue

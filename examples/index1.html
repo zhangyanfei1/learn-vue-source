@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -7,15 +8,22 @@
   <title>验证构建</title>
   <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
 </head>
+
 <body>
-  <div id="app"><aaa></aaa></div>
+  <div id="app">
+    <aaa></aaa>
+  </div>
   <script>
+    var res = Vue.compile('<div><span>{{ msg }}</span></div>')
+    console.log(res.render)
     const vm = new Vue({
       el: '#app',
       // template: '<div>{{gsd}}</div>',
       // render(h){
       //   return h('h1', 'gsd')
       // },
+      render: res.render,
+      staticRenderFns: res.staticRenderFns,
       template: '<div id=app>{{gsd}}<div>aaa</div><div>bbb</div></div>',
       components: {
         'aaa': {
@@ -28,4 +36,5 @@
     })
   </script>
 </body>
+
 </html>
