@@ -211,6 +211,7 @@ function nextTick (cb, ctx) {
 }
 
 let warn = noop$1;
+let tip = noop$1;
 let generateComponentTrace = (noop$1); // work around flow check
 let formatComponentName = (noop$1);
 
@@ -221,6 +222,14 @@ warn = (msg, vm) => { //对代码异常情况的处理
 
   } else if (hasConsole && (!config.silent)) {
     console.error(`[Vue warn]: ${msg}${trace}`);
+  }
+};
+
+tip = (msg, vm) => {
+  if (hasConsole && (!config.silent)) {
+    console.warn(`[Vue tip]: ${msg}` + (
+      vm ? generateComponentTrace(vm) : ''
+    ));
   }
 };
 
@@ -1051,6 +1060,10 @@ const baseOptions = {
   isUnaryTag
 };
 
+function generateCodeFrame (source, start, end){
+  
+}
+
 function createFunction (code, errors) {
   try {
     return new Function(code)
@@ -1061,8 +1074,61 @@ function createFunction (code, errors) {
 }
 
 function createCompileToFunctionFn (compile) {
+  const cache = Object.create(null);
   return function compileToFunctions (template, options, vm){
+    options = extend({}, options);
+    const warn$$1 = options.warn || warn;
+    delete options.warn;
+    {
+      try {
+        new Function('return 1');
+      } catch (e) {
+        if (e.toString().match(/unsafe-eval|CSP/)) {
+          warn$$1(
+            'It seems you are using the standalone build of Vue.js in an ' +
+            'environment with Content Security Policy that prohibits unsafe-eval. ' +
+            'The template compiler cannot work in this environment. Consider ' +
+            'relaxing the policy to allow unsafe-eval or pre-compiling your ' +
+            'templates into render functions.'
+          );
+        }
+      }
+    }
+
+    const key = options.delimiters
+      ? String(options.delimiters) + template
+      : template;
+    if (cache[key]) {
+      return cache[key]
+    } //生成一个key
+
     const compiled = compile(template, options);
+    {
+      if (compiled.errors && compiled.errors.length) {
+        if (options.outputSourceRange) {
+          compiled.errors.forEach(e => {
+            warn$$1(
+              `Error compiling template:\n\n${e.msg}\n\n` +
+              generateCodeFrame(template, e.start, e.end),
+              vm
+            );
+          });
+        } else {
+          warn$$1(
+            `Error compiling template:\n\n${template}\n\n` +
+            compiled.errors.map(e => `- ${e}`).join('\n') + '\n',
+            vm
+          );
+        }
+      }
+      if (compiled.tips && compiled.tips.length) {
+        if (options.outputSourceRange) {
+          compiled.tips.forEach(e => tip(e.msg, vm));
+        } else {
+          compiled.tips.forEach(msg => tip(msg, vm));
+        }
+      }
+    }
     const res = {};
     const fnGenErrors = [];
     res.render = createFunction(compiled.render, fnGenErrors);
@@ -1616,11 +1682,13 @@ function transformSpecialNewlines (text) {
 const createCompiler = createCompilerCreator(function baseCompile (
   template, options
 ) {
+  //parse 作用是将字符串模板编译成ast
   const ast = parse(template.trim(), options);
+  //静态化
   if (options.optimize !== false) { //TODO
     
   }
-
+  //ast转换成代码字符串
   const code = generate(ast, options);
   return {
     ast,

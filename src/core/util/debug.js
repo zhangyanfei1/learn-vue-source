@@ -1,6 +1,7 @@
 import { noop } from '../../shared/util'
 import config from '../config'
 export let warn = noop
+export let tip = noop
 export let generateComponentTrace = (noop) // work around flow check
 export let formatComponentName = (noop)
 
@@ -11,6 +12,14 @@ warn = (msg, vm) => { //对代码异常情况的处理
 
   } else if (hasConsole && (!config.silent)) {
     console.error(`[Vue warn]: ${msg}${trace}`)
+  }
+}
+
+tip = (msg, vm) => {
+  if (hasConsole && (!config.silent)) {
+    console.warn(`[Vue tip]: ${msg}` + (
+      vm ? generateComponentTrace(vm) : ''
+    ))
   }
 }
 
