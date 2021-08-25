@@ -1,3 +1,5 @@
+export * from './element'
+export * from './attrs'
 import {warn} from '../../../core/util/index'
 export function query (el){
   if (typeof el === 'string') {

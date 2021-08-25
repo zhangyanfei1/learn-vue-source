@@ -73,6 +73,15 @@ export function createCompileToFunctionFn (compile) {
     //   return h('div', [h('h1', 'aaa111')])
     // }
     res.staticRenderFns = {} //TODO
-    return res
+    if (true) {
+      if ((!compiled.errors || !compiled.errors.length) && fnGenErrors.length) {
+        warn(
+          `Failed to generate render function:\n\n` +
+          fnGenErrors.map(({ err, code }) => `${err.toString()} in\n\n${code}\n`).join('\n'),
+          vm
+        )
+      }
+    }
+    return (cache[key] = res)
   }
 }

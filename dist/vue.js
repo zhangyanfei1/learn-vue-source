@@ -125,6 +125,10 @@ function isNative (Ctor) {
   return typeof Ctor === 'function' && /native code/.test(Ctor.toString())
 }
 
+const isIE = UA && /msie|trident/.test(UA);
+
+const isEdge = UA && UA.indexOf('edge/') > 0;
+
 const strats = config.optionMergeStrategies;
 
 function resolveAsset (options, type, id, warnMissing){
@@ -956,6 +960,53 @@ Vue.prototype.$mount = function (el, hydrating){
   return mountComponent(this, el, hydrating)
 };
 
+const isHTMLTag = makeMap(
+  'html,body,base,head,link,meta,style,title,' +
+  'address,article,aside,footer,header,h1,h2,h3,h4,h5,h6,hgroup,nav,section,' +
+  'div,dd,dl,dt,figcaption,figure,picture,hr,img,li,main,ol,p,pre,ul,' +
+  'a,b,abbr,bdi,bdo,br,cite,code,data,dfn,em,i,kbd,mark,q,rp,rt,rtc,ruby,' +
+  's,samp,small,span,strong,sub,sup,time,u,var,wbr,area,audio,map,track,video,' +
+  'embed,object,param,source,canvas,script,noscript,del,ins,' +
+  'caption,col,colgroup,table,thead,tbody,td,th,tr,' +
+  'button,datalist,fieldset,form,input,label,legend,meter,optgroup,option,' +
+  'output,progress,select,textarea,' +
+  'details,dialog,menu,menuitem,summary,' +
+  'content,element,shadow,template,blockquote,iframe,tfoot'
+);
+
+const isSVG = makeMap(
+  'svg,animate,circle,clippath,cursor,defs,desc,ellipse,filter,font-face,' +
+  'foreignobject,g,glyph,image,line,marker,mask,missing-glyph,path,pattern,' +
+  'polygon,polyline,rect,switch,symbol,text,textpath,tspan,use,view',
+  true
+);
+
+const isReservedTag = (tag) => {
+  return isHTMLTag(tag) || isSVG(tag)
+};
+
+const isPreTag = (tag) => tag === 'pre';
+
+function getTagNamespace (tag) {
+  if (isSVG(tag)) {
+    return 'svg'
+  }
+  // basic support for MathML
+  // note it doesn't support other MathML elements being component roots
+  if (tag === 'math') {
+    return 'math'
+  }
+}
+
+const mustUseProp = (tag, type, attr) => {
+  return (
+    (attr === 'value' && acceptValue(tag)) && type !== 'button' ||
+    (attr === 'selected' && tag === 'option') ||
+    (attr === 'checked' && tag === 'input') ||
+    (attr === 'muted' && tag === 'video')
+  )
+};
+
 function query (el){
   if (typeof el === 'string') {
     const selected = document.querySelector(el);
@@ -972,6 +1023,10 @@ function query (el){
 const isUnaryTag = makeMap(
   'area,base,br,col,embed,frame,hr,img,input,isindex,keygen,' +
   'link,meta,param,source,track,wbr'
+);
+
+const canBeLeftOpenTag = makeMap(
+  'colgroup,dd,dt,li,options,p,td,tfoot,th,thead,tr,source'
 );
 
 function baseWarn (msg, range) {
@@ -1057,7 +1112,12 @@ const baseOptions = {
   expectHTML: true,
   modules: modules$1,
   directives,
-  isUnaryTag
+  isPreTag,
+  isUnaryTag,
+  canBeLeftOpenTag,
+  mustUseProp, //TODO
+  getTagNamespace,
+  isReservedTag
 };
 
 function generateCodeFrame (source, start, end){
@@ -1136,7 +1196,16 @@ function createCompileToFunctionFn (compile) {
     //   return h('div', [h('h1', 'aaa111')])
     // }
     res.staticRenderFns = {}; //TODO
-    return res
+    {
+      if ((!compiled.errors || !compiled.errors.length) && fnGenErrors.length) {
+        warn$$1(
+          `Failed to generate render function:\n\n` +
+          fnGenErrors.map(({ err, code }) => `${err.toString()} in\n\n${code}\n`).join('\n'),
+          vm
+        );
+      }
+    }
+    return (cache[key] = res)
   }
 }
 
@@ -1467,6 +1536,9 @@ function parseText (text, delimiters){
 }
 
 let warn$1;
+let platformIsPreTag;
+let platformMustUseProp;
+let platformGetTagNamespace;
 let transforms;
 let delimiters;
 
@@ -1494,28 +1566,48 @@ function processElement (element, options){
 
 function parse (template, options){
   warn$1 = options.warn || baseWarn;
-
+  platformIsPreTag = options.isPreTag || no$1;
+  platformMustUseProp = options.mustUseProp || no$1;
+  platformGetTagNamespace = options.getTagNamespace || no$1;
+  const isReservedTag = options.isReservedTag || no$1;
   transforms = pluckModuleFunction(options.modules, 'transformNode');
+  preTransforms = pluckModuleFunction(options.modules, 'preTransformNode');
+  postTransforms = pluckModuleFunction(options.modules, 'postTransformNode');
+
   delimiters = options.delimiters;
 
   const stack = [];
+  const preserveWhitespace = options.preserveWhitespace !== false;
+  const whitespaceOption = options.whitespace;
   let root;
   let currentParent;
   let inVPre = false;
-  function closeElement (element) {
+  function closeElement (element) { //关闭标签
     if (!inVPre && !element.processed) {
       element = processElement(element, options);
     }
   }
+
   parseHTML(template, {
     warn: warn$1,
     expectHTML: options.expectHTML,
-    isUnaryTag: options.isUnaryTag,
+    isUnaryTag: options.isUnaryTag, //是否是一元标签
+    canBeLeftOpenTag: options.canBeLeftOpenTag,
     shouldDecodeNewlines: options.shouldDecodeNewlines,
     shouldDecodeNewlinesForHref: options.shouldDecodeNewlinesForHref,
-    shouldKeepComment: options.comments,
+    shouldKeepComment: options.comments, //是否保存注释
+    outputSourceRange: options.outputSourceRange,
     start (tag, attrs, unary, start, end) {
+      const ns = (currentParent && currentParent.ns) || platformGetTagNamespace(tag);
+
+      if (isIE && ns === 'svg') {
+        attrs = guardIESVGBug(attrs);
+      }
+
       let element = createASTElement(tag, attrs, currentParent);
+      if (ns) {
+        element.ns = ns;
+      }
       if (!root) {
         root = element;
       }
@@ -1580,22 +1672,44 @@ function parse (template, options){
 function makeAttrsMap (attrs) {
   const map = {};
   for (let i = 0, l = attrs.length; i < l; i++) {
-    // if (
-    //   process.env.NODE_ENV !== 'production' &&
-    //   map[attrs[i].name] && !isIE && !isEdge
-    // ) {
-    //   warn('duplicate attribute: ' + attrs[i].name, attrs[i])
-    // }
+    if (
+      map[attrs[i].name] && !isIE && !isEdge
+    ) {
+      warn$1('duplicate attribute: ' + attrs[i].name, attrs[i]);
+    }
     map[attrs[i].name] = attrs[i].value;
   }
   return map
 }
 
+function guardIESVGBug (attrs) {
+  const res = [];
+  for (let i = 0; i < attrs.length; i++) {
+    const attr = attrs[i];
+    if (!ieNSBug.test(attr.name)) {
+      attr.name = attr.name.replace(ieNSPrefix, '');
+      res.push(attr);
+    }
+  }
+  return res
+}
+
+var baseDirectives = {
+  
+}
+
 class CodegenState {
   constructor (options) {
     this.options = options;
+    this.warn = options.warn || baseWarn;
+    this.transforms = pluckModuleFunction(options.modules, 'transformCode');
     this.dataGenFns = pluckModuleFunction(options.modules, 'genData');
+    this.directives = extend(extend({}, baseDirectives), options.directives);
+    const isReservedTag = options.isReservedTag || no$1;
+    this.maybeComponent = (el) => !!el.component || !isReservedTag(el.tag);
+    this.onceId = 0;
     this.staticRenderFns = [];
+    this.pre = false;
   }
 }
 function generate (ast, options){
@@ -1603,7 +1717,7 @@ function generate (ast, options){
   const code = ast ? genElement(ast, state) : '_c("div")';
   return {
     render: `with(this){return ${code}}`,
-    staticRenderFns: {}
+    staticRenderFns: state.staticRenderFns
   }
 }
 

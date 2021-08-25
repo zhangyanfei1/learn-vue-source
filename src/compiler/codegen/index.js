@@ -1,10 +1,18 @@
-import {pluckModuleFunction} from '../helpers'
-
+import {baseWarn, pluckModuleFunction} from '../helpers'
+import baseDirectives from '../directives/index'
+import { extend, no } from '../../shared/util'
 export class CodegenState {
   constructor (options) {
     this.options = options
+    this.warn = options.warn || baseWarn
+    this.transforms = pluckModuleFunction(options.modules, 'transformCode')
     this.dataGenFns = pluckModuleFunction(options.modules, 'genData')
+    this.directives = extend(extend({}, baseDirectives), options.directives)
+    const isReservedTag = options.isReservedTag || no
+    this.maybeComponent = (el) => !!el.component || !isReservedTag(el.tag)
+    this.onceId = 0
     this.staticRenderFns = []
+    this.pre = false
   }
 }
 export function generate (ast, options){
@@ -12,7 +20,7 @@ export function generate (ast, options){
   const code = ast ? genElement(ast, state) : '_c("div")'
   return {
     render: `with(this){return ${code}}`,
-    staticRenderFns: {}
+    staticRenderFns: state.staticRenderFns
   }
 }
 

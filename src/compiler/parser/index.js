@@ -1,8 +1,14 @@
 import {parseHTML} from './html-parser'
 import { parseText } from './text-parser'
 import { baseWarn,pluckModuleFunction } from '../helpers'
+import { no } from '../../shared/util'
+import { isIE, isEdge } from '../../core/util/env'
 
 export let warn
+let platformIsPreTag
+let platformMustUseProp
+let platformGetTagNamespace
+let maybeComponent
 let transforms
 let delimiters
 
@@ -30,28 +36,66 @@ export function processElement (element, options){
 
 export function parse (template, options){
   warn = options.warn || baseWarn
+  platformIsPreTag = options.isPreTag || no
+  platformMustUseProp = options.mustUseProp || no
+  platformGetTagNamespace = options.getTagNamespace || no
+  const isReservedTag = options.isReservedTag || no
+  maybeComponent = (el) => !!(
+    el.component ||
+    el.attrsMap[':is'] ||
+    el.attrsMap['v-bind:is'] ||
+    !(el.attrsMap.is ? isReservedTag(el.attrsMap.is) : isReservedTag(el.tag))
+  )
 
   transforms = pluckModuleFunction(options.modules, 'transformNode')
+  preTransforms = pluckModuleFunction(options.modules, 'preTransformNode')
+  postTransforms = pluckModuleFunction(options.modules, 'postTransformNode')
+
   delimiters = options.delimiters
 
   const stack = []
+  const preserveWhitespace = options.preserveWhitespace !== false
+  const whitespaceOption = options.whitespace
   let root
   let currentParent
   let inVPre = false
-  function closeElement (element) {
+  let inPre = false
+  let warned = false
+  function closeElement (element) { //关闭标签
     if (!inVPre && !element.processed) {
       element = processElement(element, options)
     }
   }
+
+  function trimEndingWhitespace (el) {
+
+  }
+
+  function checkRootConstraints (el) {
+
+  }
+
+
   parseHTML(template, {
     warn,
     expectHTML: options.expectHTML,
-    isUnaryTag: options.isUnaryTag,
+    isUnaryTag: options.isUnaryTag, //是否是一元标签
+    canBeLeftOpenTag: options.canBeLeftOpenTag,
     shouldDecodeNewlines: options.shouldDecodeNewlines,
     shouldDecodeNewlinesForHref: options.shouldDecodeNewlinesForHref,
-    shouldKeepComment: options.comments,
+    shouldKeepComment: options.comments, //是否保存注释
+    outputSourceRange: options.outputSourceRange,
     start (tag, attrs, unary, start, end) {
+      const ns = (currentParent && currentParent.ns) || platformGetTagNamespace(tag)
+
+      if (isIE && ns === 'svg') {
+        attrs = guardIESVGBug(attrs)
+      }
+
       let element = createASTElement(tag, attrs, currentParent)
+      if (ns) {
+        element.ns = ns
+      }
       if (!root) {
         root = element
       }
@@ -116,13 +160,24 @@ export function parse (template, options){
 function makeAttrsMap (attrs) {
   const map = {}
   for (let i = 0, l = attrs.length; i < l; i++) {
-    // if (
-    //   process.env.NODE_ENV !== 'production' &&
-    //   map[attrs[i].name] && !isIE && !isEdge
-    // ) {
-    //   warn('duplicate attribute: ' + attrs[i].name, attrs[i])
-    // }
+    if (
+      map[attrs[i].name] && !isIE && !isEdge
+    ) {
+      warn('duplicate attribute: ' + attrs[i].name, attrs[i])
+    }
     map[attrs[i].name] = attrs[i].value
   }
   return map
-} 
+}
+
+function guardIESVGBug (attrs) {
+  const res = []
+  for (let i = 0; i < attrs.length; i++) {
+    const attr = attrs[i]
+    if (!ieNSBug.test(attr.name)) {
+      attr.name = attr.name.replace(ieNSPrefix, '')
+      res.push(attr)
+    }
+  }
+  return res
+}
